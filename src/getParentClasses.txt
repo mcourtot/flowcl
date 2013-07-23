@@ -1,0 +1,13 @@
+# Find all parent classes of the cell type of interest. Note that for some reason,
+# matching on ?x does not work, but matching on ?celllabel (x's label) does.
+# Matching directly on ?x works on http://sparql.hegroup.org/sparql !
+select distinct ?x ?celllabel ?parent ?parentlabel
+where
+{
+  ?parent a owl:Class.
+  ?x a owl:Class.
+  ?x rdfs:label ?celllabel.
+  ?x rdfs:subClassOf ?parent.
+  ?parent rdfs:label ?parentlabel.
+  FILTER regex(?celllabel, "$label", "i")
+}
