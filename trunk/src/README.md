@@ -1,5 +1,6 @@
 # Description of code scripts.
 # Last updated: July 19, 2013 by Radina Droumeva (radina.droumeva@gmail.com)
+#
 
 Note: as a first step you must have R installed, as well as the R package "SPARQL":
 http://cran.r-project.org/web/packages/SPARQL/
