@@ -1,78 +1,32 @@
-###################################################
+#################################################################################
 # Using R to query SPARQL: supporting functions
 # Author: Radina Droumeva (radina.droumeva@gmail.com)
 # Date last modified: July 19, 2013
-###################################################
+# Edited by: Justin Meskas (jmeskas@bccrc.ca)
+# Date last modified: Sep 05, 2013
+#################################################################################
 
-
-###################################################
-### Break up a phenotype into individual markers and 'signs'
-#
-# Args:
-#   phenotype: a string to decompose into individual markers, e.g. "CD19+CD20-"
-# Value:
-#   A list of vectors: one of positively expressed markers and one of 
-#   negatively expressed ones.
-# Details:
-#   TO DO: After discussion this should be changed to also support expression
-#    levels other than 'positive' and 'negative' -- such as 'dim', and ??
-
-phenoParse <- function(phenotype) {
-  if (!is.character(phenotype)){
-    warning("Phenotype is not a valid string!")
-    try (phenotype <- as.character(phenotype))
+#################################################################################
+# Change the . in HLA.DR to a - since the + and - signs are reserved for spilting the string
+changeHLADR <- function(marker.list){
+if (length(marker.list[["Positive"]]) >= 1){
+  for (q3 in 1:length(marker.list[["Positive"]])){
+    if (marker.list[["Positive"]][q3] == "HLA.DR"){
+      marker.list[["Positive"]][q3] <- "HLA-DR"
+    }
   }
-  # First split up the string based on + or - to get the markers
-  markers <- unlist(strsplit(x = phenotype, split = "\\+|\\-"))
-
-  # Next, split the original string based on the markers found above, leaving
-  # only the signs (remove first result as there is no leading sign)
-  signs <- unlist(strsplit(x = phenotype, 
-                  split = paste(markers, sep = "", collapse="|")))[-1]
-
-  # Return a list of positive and negative markers
-  res <- list(`Positive` = markers[signs == "+"],
-              `Negative` = markers[signs == "-"])
-  return (res)
+}
+if (length(marker.list[["Negative"]]) >= 1){
+  for (q3 in 1:length(marker.list[["Negative"]])){
+    if (marker.list[["Negative"]][q3] == "HLA.DR"){
+      marker.list[["Negative"]][q3] <- "HLA-DR"
+    }
+  }
+}
+return(marker.list)
 }
 
-
-
-###################################################
-### Condense a results table to the unique entries only and tabulate repeated
-### hits
-#
-# Args:
-#   res: a matrix containing SPARQL query results
-# Value:
-#   A cleanly tabulated results matrix (table)
-# Details:
-#   TO DO: For now, this relies on the first column having the unique IDs of
-#   the owl objects returned.
-tabulateResults <- function(res){
-  number.of.hits <- table(res[, 1])
-  res <- cbind(res, number.of.hits[res[, 1]])
-  colnames(res)[ncol(res)] <- "Number Of Hits"
-  unique.ids <- unique(res[, 1])
-  clean.res <- matrix("", nrow = length(unique.ids), ncol = ncol(res)+1)
-  colnames(clean.res) <- c(colnames(res), "Score")
-  rownames(clean.res) <- unique.ids
-  for (id in unique.ids){
-    locate.entries <- which(res[, 1] == id)
-    clean.res[id, ] <- c(id, res[locate.entries[1], 2], 
-                  apply(res[locate.entries, 3:(ncol(res) - 2)], 2, paste, 
-                  collapse = "\n"), sum(res[locate.entries, 'penalties']),
-                  res[locate.entries[1], ncol(res)], 0)
-    clean.res[id, "Score"] <- as.numeric(clean.res[id, "Number Of Hits"]) + 
-                              as.numeric(clean.res[id, "penalties"])
-  }
-  sort.scores <- sort(as.numeric(clean.res[, "Score"]), 
-                      decreasing = TRUE, index.return = TRUE)$ix
-  return (clean.res[sort.scores, ])
-}
-
-
-###################################################
+#################################################################################
 # Convert colour name to hexadecimal, and optionally add transparency via the 
 # alpha parameter. For example, 'col2hex('red', '55') will generate a transaprent
 # red. Useful when placing a legend over a plot, can make the background colour 
@@ -86,14 +40,188 @@ col2hex <- function(colour, alpha = "FF"){
     return (hex)
 }
 
+#################################################################################
+# Removes all the non first generation children from the child.analysis to produce
+# a flow chart.
 
-###################################################
+flowChart <- function(child.analysis, clean.res, phenotype){
+  
+  library("Rgraphviz")
+  
+  # Sort the child.analysis by starting with the cell population which has
+  # the most children to the one with the least-- i.e. is the most likely to be the 
+  # root parent, such as 'cell' or 'native cell':
+  child.lengths <- unlist(lapply(child.analysis, length))
+  sort.child <- child.analysis[order(child.lengths, decreasing=TRUE)]
+  labels <- names(sort.child)
+  arrows.colour <- NULL
+  arrows.label <- NULL
+  arrows.dashed.solid <- NULL
+  arrows.head <- NULL
+  
+  if (ShowOntologyMarkerNames==TRUE){marker.list2 <- marker.list}
+#   
+#   arrows.dashed.solid <- c(labels,"temp", "temp")
+#   
+#   for (q20 in 1:length(arrows.dashed.solid)){
+#     arrows.dashed.solid[q20] <- "solid"
+#   }
+#   
+  
+  # A quadruple for loop (probably not the most elegant, but it is still fast). Start with q8,
+  # which selects the label with the most children first. q9 stores an element from the q8 label. q10 
+  # and q11 look through all other elements in the q8 label and detects if the stored 
+  # element (q9) is a parent of other elements in the q8 label. If this is true, then the element
+  # q11 is removed from the q8 label.
+  # In short, something that is not a first generation child will be removed from the list.
+  for (q8 in 1:length(labels)){
+    deletePoints <- NULL
+    for (q9 in 1:length(child.analysis[labels[q8]][[1]])){
+      
+      if (is.null(child.analysis[labels[q8]][[1]][q9])){next}
+      
+      temp.label <- child.analysis[labels[q8]][[1]][q9]
+      
+      for (q10 in 1:length(child.analysis[temp.label][[1]])){
+        for (q11 in 1:length(child.analysis[labels[q8]][[1]])){
+          
+          
+          if (!is.null(child.analysis[temp.label][[1]][q10])){
+            if((child.analysis[temp.label][[1]][q10] == child.analysis[labels[q8]][[1]][q11]) & (q9!=q11)){
+              # stores points for removal
+              deletePoints <- c(deletePoints,q11)
+            }
+          }
+        }
+      }
+    }
+          if(!is.null(deletePoints)){
+            # removes all non first generation children
+            child.analysis[labels[q8]][[1]] <- child.analysis[labels[q8]][[1]][-deletePoints] 
+          }
+  }
+        
+        # Sets up Rgraphviz with all the node titles in "labels"
+        rEG <- new("graphNEL", nodes=c(labels, marker.list2[["Positive"]], marker.list2[["Negative"]]), edgemode="directed")
+        
+        for(q13 in 1:length(labels)){
+          for (q14 in 1:length(child.analysis[labels[q13]][[1]])){
+            if (!is.null(child.analysis[labels[q13]][[1]][q14])){
+              # Adds an arrow from parent to child
+              rEG <- addEdge(child.analysis[labels[q13]][[1]][q14], labels[q13], rEG, 1)
+              arrows.colour <- c(arrows.colour, "black")
+              arrows.label  <- c(arrows.label , paste(child.analysis[labels[q13]][[1]][q14], "~", labels[q13], sep=""))
+              arrows.dashed.solid <- c(arrows.dashed.solid, "solid")    
+              arrows.head <- c(arrows.head, "open")     
+              
+              
+              
+            }
+          }
+        }
+        
+  labels.colour <- labels
+  
+  # Load all phenotypes
+  ColoursList <- read.csv("listOfColours.csv", header=F)
+  ColoursList <- as.matrix(ColoursList)
+  
+  count.markers <- 0
+  for (q15 in 1:length(labels)){
+    for (q16 in 1:length(clean.res[,2])){
+      if(clean.res[q16,2]==(labels[q15])){
+        if (length(marker.list[["Positive"]])!=0){
+        for (q17 in 1:length(marker.list[["Positive"]])){
+          if(grepl(marker.list[["Positive"]][q17],clean.res[q16,5])==TRUE){
+            count.markers <- count.markers + 1
+            rEG <- addEdge(marker.list2[["Positive"]][q17],labels[q15], rEG, 1)
+            arrows.colour <- c(arrows.colour, ColoursList[q17])
+            arrows.label  <- c(arrows.label , paste(marker.list2[["Positive"]][q17],"~",labels[q15], sep=""))
+            arrows.dashed.solid <- c(arrows.dashed.solid, "dashed")       
+            arrows.head <- c(arrows.head, "none")     
+            
+        }}}
+        if (length(marker.list[["Negative"]])!=0){
+        for (q18 in 1:length(marker.list[["Negative"]])){
+          if(grepl(marker.list[["Negative"]][q18],clean.res[q16,5])==TRUE){
+            count.markers <- count.markers + 1
+            rEG <- addEdge(marker.list2[["Negative"]][q18],labels[q15], rEG, 1)
+            arrows.colour <- c(arrows.colour, ColoursList[length(marker.list2[["Positive"]])+q18])
+            arrows.label  <- c(arrows.label , paste(marker.list2[["Negative"]][q18],"~",labels[q15], sep=""))
+            arrows.dashed.solid <- c(arrows.dashed.solid, "dashed")
+            arrows.head <- c(arrows.head, "none")     
+            
+        }}}
+        # make perfect matches green  
+        if(count.markers==length(unlist(marker.list))){        
+        labels.colour[q15] <- "lightgreen"
+        count.markers <- 0
+        }
+        else{ # colour the partial matches a beige colour
+          labels.colour[q15] <- "bisque"
+          count.markers <- 0     
+        }
+        break
+      }
+      else{ # colour all the non-important parents white
+        labels.colour[q15] <- "white"
+      }
+      
+    }
+  }
+  if (length(marker.list[["Positive"]])!=0){ # colour positive markers sky blue
+  for (q19 in 1:(length(marker.list[["Positive"]]))){
+  labels.colour[length(labels)+q19] <- "skyblue"
+  }}
+  if (length(marker.list[["Negative"]]!=0)){
+  for (q19 in 1:(length(marker.list[["Negative"]]))){ #colour negative markers a light red colour
+    labels.colour[length(labels)+length(marker.list[["Positive"]])+q19] <- "lightcoral"
+  }}
+  nAttrs <- list()
+  eAttrs <- list()
+
+#   nAttrs$color <- structure(c(labels.colour), .Names = c(labels))
+  nAttrs$fillcolor <- structure(c(labels.colour), .Names = c(labels, marker.list2[["Positive"]], marker.list2[["Negative"]]))
+  eAttrs$color <- structure(c(arrows.colour), .Names = c(arrows.label))
+  
+#  edgesInfo <- buildEdgeList(rEG, edgeAttrs=eAttrs, defAttrs=defAttrs$edge)  
+  eAttrs$style <- structure(c(arrows.dashed.solid), .Names = c(arrows.label))
+  eAttrs$arrowhead <- structure(c(arrows.head), .Names = c(arrows.label))
+  
+#   for (q21 in 1:length(arrows.label)){
+#   edgesInfo[[arrows.label[q21]]]@attrs$arrowhead <- arrows.head[q21]
+#   }
+  
+#   eAttrs$style <- c("CD4 molecule~naive regulatory T cell"="dotted")
+#   edgeData(rEG, "CD4 molecule~naive regulatory T cell", c("style")) <- c("dashed")
+#   edges[["CD4 molecule~naive regulatory T cell"]]@attrs$arrowhead <- "none"
+#   eAttrs$arrowhead <- c("CD4 molecule~naive regulatory T cell"="none")
+  
+  attrs <- list( node=list(shape="ellipse", fontsize = 14, fixedsize=FALSE),graph=list(rankdir="BT"))
+  #, edge=list(color="green", arrowhead="none")
+#   attrs$edge$style <- structure(c(arrows.dashed.solid), .Names = c(arrows.label))
+#   attrs$edge$arrowhead <- structure(c(arrows.head))
+ 
+        # create a pdf flow chart
+        child.file.name <- paste(save.dir, "tree_", phenotype, ".pdf", sep = "")     
+        pdf(file=child.file.name, width=10.5, height=8)    
+        plot(rEG, nodeAttrs=nAttrs, edgeAttrs=eAttrs, attrs=attrs) 
+  
+#   plot(rEG, attrs=list(node=list(shape="ellipse", fontsize = 14, fixedsize=FALSE,label="foo", fillcolor="lightgreen"),
+#                        edge=list(color="green"),
+#                        graph=list(rankdir="LR")))     
+        #plot(rEG, nodeAttrs=nAttrs, edgeAttrs=eAttrs, attrs=attrs) 
+        dev.off()
+        
+}
+
+#################################################################################
 # Locate peaks in a density function
 # Input:
 #   x should be a vector of values, typically arising from density(data)$y, or a 
 # smoothed version of this
 #   span should be a value between 0 and 1, corresponding to the proportion of 
-# the range of values which the peak must cover in order to be considered valid.
+# the range of values which the peak must cover in order to be coneural cell adhesion molecule 1nsidered valid.
 getPeaks <- function(x, span=.05){
   x <- as.vector(x)
   peaks <- c()
@@ -118,7 +246,7 @@ getPeaks <- function(x, span=.05){
 }
 
 
-####################################################
+#################################################################################
 # Whenever there is no perfect score, instead of trying to use the quantile to set
 # a threshold, use the density of scores and grab the highest peak:
 getScoreCutoff <- function(scores){
@@ -139,8 +267,112 @@ getScoreCutoff <- function(scores){
   return (cutoff)
 }
 
+#################################################################################
+### Break up a phenotype into individual markers and 'signs'
+#
+# Args:
+#   phenotype: a string to decompose into individual markers, e.g. "CD19+CD20-"
+# Value:
+#   A list of vectors: one of positively expressed markers and one of 
+#   negatively expressed ones.
+# Details:
+#   TO DO: After discussion this should be changed to also support expression
+#    levels other than 'positive' and 'negative' -- such as 'dim', 'low', 'lo', 'high' and ??
 
-####################################################
+phenoParse <- function(phenotype) {
+  if (!is.character(phenotype)){
+    warning("Phenotype is not a valid string!")
+    try (phenotype <- as.character(phenotype))
+  }
+  
+  # First split up the string based on + or - to get the markers
+  markers <- unlist(strsplit(x = phenotype, split = "\\+|\\-"))
+  # Next, split the original string based on the markers found above, leaving
+  # only the signs (remove first result as there is no leading sign)
+  
+  signs <- unlist(strsplit(x = phenotype, 
+                           split = paste(markers, sep = "", collapse="|")))[-1]
+  
+  # Return a list of positive and negative markers
+  res <- list(`Positive` = markers[signs == "+"],
+              `Negative` = markers[signs == "-"])
+  # if (strpos(phenotype,'HLA-DR'){
+  
+  #  }
+  return (res)
+}
+
+
+
+#################################################################################
+# Creates a string with the updated phenotypes to have better formatting for the .csv file
+phenoUnparse <- function(marker.list){
+  temp.string <- NULL
+  if(length(marker.list[["Positive"]])>=1){
+    for(q6 in 1:length(marker.list[["Positive"]])){
+      temp.string <-  paste(temp.string, marker.list[["Positive"]][q6],"\n",sep="")
+    }}
+  if(length(marker.list[["Negative"]])>=1){
+    for(q6 in 1:length(marker.list[["Negative"]])){
+        temp.string <-  paste(temp.string, marker.list[["Negative"]][q6],"\n",sep="")     
+    }}
+  # removes the \n from the last line for formatting reasons in the .csv file
+  temp.string <- substr(temp.string,1,nchar(temp.string)-1) 
+  return(temp.string)
+}
+
+#################################################################################
+### Condense a results table to the unique entries only and tabulate repeated
+### hits
+#
+# Args:
+#   res: a matrix containing SPARQL query results
+# Value:
+#   A cleanly tabulated results matrix (table)
+# Details:
+#   TO DO: For now, this relies on the first column having the unique IDs of
+#   the owl objects returned.
+tabulateResults <- function(res){
+  number.of.hits <- table(res[, 1])
+  res <- cbind(res, number.of.hits[res[, 1]])
+  colnames(res)[ncol(res)] <- "Number Of Hits"
+  unique.ids <- unique(res[, 1])
+  clean.res <- matrix("", nrow = length(unique.ids), ncol = ncol(res)+1)
+  colnames(clean.res) <- c(colnames(res), "Score")
+  rownames(clean.res) <- unique.ids
+  for (id in unique.ids){
+    locate.entries <- which(res[, 1] == id)
+    clean.res[id, ] <- c(id, res[locate.entries[1], 2], 
+                         apply(res[locate.entries, 3:(ncol(res) - 2)], 2, paste, 
+                               collapse = "\n"), sum(res[locate.entries, 'penalties']),
+                         res[locate.entries[1], ncol(res)], 0)
+    clean.res[id, "Score"] <- as.numeric(clean.res[id, "Number Of Hits"]) + 
+      as.numeric(clean.res[id, "penalties"])
+  }
+  # Required because of a bug cause from only having 1 row (f[1,] notation was a problem)
+  if (nrow(clean.res)>=2){
+    sort.scores <- sort(as.numeric(clean.res[, "Score"]), 
+                        decreasing = TRUE, index.return = TRUE)$ix
+    return (clean.res[sort.scores, ])
+  }
+  else{
+    return (clean.res)
+  }
+}
+
+#################################################################################
+# Prints out the time since start_time. Used for optimizing code.
+TimeOutput <- function(start_time) {
+  start_time <- as.POSIXct(start_time)
+  dt <- difftime(Sys.time(), start_time, units="secs")
+  # Since you only want the H:M:S, we can ignore the date...
+  # but you have to be careful about time-zone issues
+  format(.POSIXct(dt,tz="GMT"), "%H:%M:%S")
+}
+TimeOutput(Sys.Date())
+
+
+#################################################################################
 # Plot results in a tree structure: THIS SHOULD PROBABLY BE REPLACED WITH GRAPHVIZ OR ANYTHING BETTER!!!!
 treePlot <- function(parent.analysis, child.analysis, scores, xlim=NULL, ylim=NULL){
   parent.analysis <- lapply(parent.analysis, unique)
@@ -182,6 +414,7 @@ treePlot <- function(parent.analysis, child.analysis, scores, xlim=NULL, ylim=NU
   plot(1,1, col="white", xlim = xlim, ylim = ylim)
   correction.y <- 1.1*strheight("CD") # typical text height
   x.threshold <- 1.2*strwidth("native cell") # typical text length
+  cat("Correction of y: ")
   print(correction.y)
   i <- strheight("A") # default horizontal spacing between tree branches
   # Initial placement of first root is in the middle (or 1/3rd of the way if more roots) at the top
@@ -310,3 +543,115 @@ treePlot <- function(parent.analysis, child.analysis, scores, xlim=NULL, ylim=NU
   }
   return (coords)
 } 
+
+#################################################################################
+# Finds and stores information for display in a .csv file
+updateLists <- function(clean.res){
+  # Creates the lists MarkerLabels, CellLabels, PhenotypeID and CellID
+  # Column 7 is the Number of Hits
+  # Column 5 is the type of markers that were hits
+  # Column 2 is the type of cell with the corresponding markers
+  # Column 4 is the marker ID
+  # Column 1 is the cell ID
+  # The code could be rewritten to look for column names instead of relying on thecolumn numbers
+  BreakTrue <- FALSE
+  if (max(clean.res[,7])>=1){
+    for (q2 in 1:min(length(clean.res[,7]),5)){
+      if (q2 == 1 & (clean.res[q2,7]) == max(clean.res[,7])){
+        listMarkerLabels.temp <- paste(q2,") ",(clean.res[q2,5]),"\n", sep="") 
+        listCellLabels.temp   <- paste(q2,") ",(clean.res[q2,2]),"\n", sep="")
+        
+        # Look in the Label of the marker ID for "PR" then pulls out the PR and the numbers that follow 
+        temp.index <- gregexpr("PR", (clean.res[q2,4]))
+        temp.string <- ""
+        if ((temp.index[[1]][1]!=-1)){
+          for (q7 in 1:length(temp.index[[1]])){
+            temp.string <- paste(temp.string, substr(clean.res[q2,4],temp.index[[1]][q7],temp.index[[1]][q7]+11),"\n", sep="")
+            if(q7 == length(temp.index[[1]])){temp.string <- substr(temp.string,1,nchar(temp.string)-1)} # Removes the last \n 
+          }}
+        # Look in the Label of the marker ID for "GO" then pulls out the GO and the numbers that follow
+        temp.index <- gregexpr("GO", (clean.res[q2,4]))
+        if ((temp.index[[1]][1]!=-1)){
+          if (temp.string!=""){
+            temp.string <- paste(temp.string,"\n",sep="")
+          }
+          for (q7 in 1:length(temp.index[[1]])){
+            temp.string <- paste(temp.string, substr(clean.res[q2,4],temp.index[[1]][q7],temp.index[[1]][q7]+9),"\n", sep="")
+            if(q7 == length(temp.index[[1]])){temp.string <- substr(temp.string,1,nchar(temp.string)-1)} # Removes the last \n      
+          }}
+        # Stores this string into the lists
+        listPhenotypeID.temp  <- paste(q2,") ",temp.string,"\n", sep="")
+        
+        # Look in the Label of the Cell ID for "CL" then pulls out the CL and the numbers that follow
+        temp.index <- gregexpr("CL", (clean.res[q2,1]))
+        temp.string <- ""
+        if ((temp.index[[1]][1]!=-1)){
+          for (q7 in 1:length(temp.index[[1]])){
+            temp.string <- paste(temp.string, substr(clean.res[q2,1],temp.index[[1]][q7],temp.index[[1]][q7]+9),"\n", sep="")
+            if(q7 == length(temp.index[[1]])){temp.string <- substr(temp.string,1,nchar(temp.string)-1)} # Removes the last \n 
+          }}
+        # Stores this string into the lists
+        listCellID.temp  <- paste(q2,") ",temp.string,"\n", sep="")
+      }
+      if (q2 > 1 & (clean.res[q2,7]) == max(clean.res[,7])){
+        listMarkerLabels.temp <- paste(listMarkerLabels.temp , q2, ") ",(clean.res[q2,5]),"\n", sep="")
+        listCellLabels.temp   <- paste(listCellLabels.temp   , q2, ") ",(clean.res[q2,2]),"\n", sep="")
+        
+        # Look in the Label of the marker ID for "PR" then pulls out the PR and the numbers that follow 
+        temp.index <- gregexpr("PR", (clean.res[q2,4]))
+        temp.string <- ""
+        if ((temp.index[[1]][1]!=-1)){
+          for (q7 in 1:length(temp.index[[1]])){
+            temp.string <- paste(temp.string, substr(clean.res[q2,4],temp.index[[1]][q7],temp.index[[1]][q7]+11),"\n", sep="")
+            if(q7 == length(temp.index[[1]])){temp.string <- substr(temp.string,1,nchar(temp.string)-1)} # Removes the last \n 
+          }}
+        # Look in the Label of the marker ID for "GO" then pulls out the GO and the numbers that follow
+        temp.index <- gregexpr("GO", (clean.res[q2,4]))
+        if ((temp.index[[1]][1]!=-1)){
+          if (temp.string!=""){
+            temp.string <- paste(temp.string,"\n",sep="")
+          }
+          for (q7 in 1:length(temp.index[[1]])){
+            temp.string <- paste(temp.string, substr(clean.res[q2,4],temp.index[[1]][q7],temp.index[[1]][q7]+9),"\n", sep="")
+            if(q7 == length(temp.index[[1]])){temp.string <- substr(temp.string,1,nchar(temp.string)-1)} # Removes the last \n        
+          }}
+        # Stores this string into the lists
+        listPhenotypeID.temp  <- paste(listPhenotypeID.temp  , q2, ") ",temp.string,"\n", sep="")
+        
+        # Look in the Label of the Cell ID for "CL" then pulls out the CL and the numbers that follow
+        temp.index <- gregexpr("CL", (clean.res[q2,1]))
+        temp.string <- ""
+        if ((temp.index[[1]][1]!=-1)){
+          for (q7 in 1:length(temp.index[[1]])){
+            temp.string <- paste(temp.string, substr(clean.res[q2,1],temp.index[[1]][q7],temp.index[[1]][q7]+9),"\n", sep="")
+            if(q7 == length(temp.index[[1]])){temp.string <- substr(temp.string,1,nchar(temp.string)-1)} # Removes the last \n 
+          }}
+        # Stores this string into the lists
+        listCellID.temp  <- paste(listCellID.temp  , q2, ") ",temp.string,"\n", sep="")
+      }
+      if ((clean.res[q2,7]) != max(clean.res[,7])){
+        BreakTrue <- TRUE
+        break
+      }  
+    }# end of for loop
+  }# end of if statement
+  
+  # If there is more than 5 elements to store, then the rest is cut off and a "+ more" is displayed
+  if (length(clean.res[,7])>5 & BreakTrue == FALSE){
+    listMarkerLabels.temp <- paste(listMarkerLabels.temp, "+ more")
+    listCellLabels.temp   <- paste(listCellLabels.temp,   "+ more")
+    listPhenotypeID.temp  <- paste(listPhenotypeID.temp,  "+ more")
+    listCellID.temp       <- paste(listCellID.temp,       "+ more")
+  }
+  # Removes the last \n from the string for better formatting int the .csv file
+  else{
+    listMarkerLabels.temp <- substr(listMarkerLabels.temp,1,nchar(listMarkerLabels.temp)-1)
+    listCellLabels.temp   <- substr(listCellLabels.temp,  1,nchar(listCellLabels.temp)-1)
+    listPhenotypeID.temp  <- substr(listPhenotypeID.temp, 1,nchar(listPhenotypeID.temp)-1)
+    listCellID.temp       <- substr(listCellID.temp,      1,nchar(listCellID.temp)-1)
+  }
+  
+  return(c(listMarkerLabels.temp, listCellLabels.temp, listPhenotypeID.temp, listCellID.temp))
+}
+
+
