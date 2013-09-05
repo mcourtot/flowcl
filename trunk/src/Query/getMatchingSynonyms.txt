@@ -1,0 +1,9 @@
+select distinct ?x ?label
+{
+?x a owl:Class.
+{ ?x rdfs:label ?label. }
+UNION
+{ ?x oboinowl:hasExactSynonym ?label. }
+FILTER regex(?label, "$marker", "i")
+}
+

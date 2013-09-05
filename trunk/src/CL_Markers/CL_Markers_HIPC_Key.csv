@@ -1,0 +1,35 @@
+CD3-CD19+CD20+IgD+CD27-,naïve B
+CD3-CD19+CD20+IgD-CD27+,IgD- memory B
+CD3-CD19+CD20+IgD+CD27+,IgD+ memory B
+CD3-CD19+CD20+CD38+CD24+,transitional B
+CD3-CD19+CD20-CD38+CD27+,plasmablasts
+CD3+CD4+CD8-CCR7+CD45RA+,naïve T helper
+CD3+CD4+CD8-CCR7+CD45RA-,central memory T helper
+CD3+CD4+CD8-CCR7-CD45RA-,effector memory T helper
+CD3+CD4+CD8-CCR7-CD45RA+,effector T helper
+CD3+CD4+CD8-CD38+HLA.DR+,activated T helper
+CD3+CD4-CD8+CCR7+CD45RA+,naïve cytotoxic T cell
+CD3+CD4-CD8+CCR7+CD45RA-,central memory cytotoxic T cell
+CD3+CD4-CD8+CCR7-CD45RA-,effector memory cytotoxic T cell
+CD3+CD4-CD8+CCR7-CD45RA+,effector cytotoxic T cell
+CD3+CD4-CD8+CD38+HLA.DR+,activated cytotoxic T cell
+CD3+CD4+CD25+CD127-CCR4+CD45RO+,memory Tregs
+CD3+CD4+CD25+CD127-CCR4+CD45RO-,naïve Tregs
+CD3+CD4+CD25+CD127-CCR4+HLA.DR+,activated Tregs
+CD3+CD4+CD8-CXCR3-CCR6-,Th2 T helper
+CD3+CD4+CD8-CXCR3+CCR6-,Th1 T helper
+CD3+CD4+CD8-CXCR3-CCR6+,Th17 T helper
+CD3+CD4-CD8+CXCR3-CCR6-,Th2 cytotoxic T cell
+CD3+CD4-CD8+CXCR3+CCR6-,Th1 cytotoxic T cell
+CD3+CD4-CD8+CXCR3-CCR6+,Th17 cytotoxic T cell
+CD14-CD3-CD19-CD20-CD16-CD56-HLA.DR+CD11c-CD123+,plasmacytoid dendritic cells
+CD14-CD3-CD19-CD20-CD16-CD56-HLA.DR+CD11c+CD123-,myeloid dendritic cells
+CD3+CD4+CD127-CD25+,Tregs
+CD3+CD4+CD127-CD25+CCR4+,total Tregs
+CD3-CD19-CD20-CD14+,monocytes
+CD3-CD19-CD20-CD14+CD16+,CD16+ monocytes
+CD3-CD19-CD20-CD14+CD16-,CD16- monocytes
+CD3-CD19-CD20-CD14-HLA.DR-,NK cells
+CD3-CD19-CD20-CD14-HLA.DR-CD16+CD56+,CD56+ NK cells
+CD3-CD19-CD20-CD14-HLA.DR-CD16+CD56-,CD56- NK cells
+CD3-CD19-CD20-CD14-CD16-CD56-HLA.DR+,dendritic cells
